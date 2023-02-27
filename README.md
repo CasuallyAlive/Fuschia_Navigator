@@ -40,6 +40,8 @@ Contributors names and contact info
 Jordy A. Larrea Rodriguez  
 [@CasuallyAlive](https://github.com/CasuallyAlive)
 
+Cody Argyle
+
 ## Version History
 
 * 0.1
