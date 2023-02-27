@@ -41,7 +41,7 @@ Jordy A. Larrea Rodriguez
 [@CasuallyAlive](https://github.com/CasuallyAlive)
 
 Cody Argyle
-[@CodyArgyle](https://github.com/CasuallyAlive/Fuschia_Navigator)
+[@CodyArgyle](https://github.com/CodyArgyle)
 
 ## Version History
 
