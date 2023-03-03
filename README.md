@@ -43,6 +43,9 @@ Jordy A. Larrea Rodriguez
 Cody Argyle
 [@CodyArgyle](https://github.com/CodyArgyle)
 
+Nicole Sundberg
+[@nicolesundberg](https://github.com/nicolesundberg)
+
 ## Version History
 
 * 0.1
