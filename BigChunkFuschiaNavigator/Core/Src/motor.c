@@ -383,13 +383,13 @@ int PID_Standard(struct MotorStruct *motor) {
 
 	motor->pid_params.error_integral = error_integral;
 	
-	/// Calculate proportional portion, add integral and write to "output" variable
+	/// TODO: Calculate proportional portion, add integral and write to "output" variable
 
 	int16_t output = error_proportional + error_integral;
 
-	/// Divide the output into the proper range for output adjustment (Divide by five which is equal to maximum integral clamp)
+	/// TODO: Divide the output into the proper range for output adjustment (Divide by five which is equal to maximum integral clamp)
 	output = output >> 5;
-	/// Clamp the output value between 0 and MOTOR_MAX_RPM 
+	/// TODO: Clamp the output value between 0 and MOTOR_MAX_RPM 
 	output = getAdjustedSpeed(output);
 		
 	duty_cycle = output;            // For debug viewing
