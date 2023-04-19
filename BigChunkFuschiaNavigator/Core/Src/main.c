@@ -76,7 +76,7 @@ int main(void)
 
   /* Configure the system clock */
   SystemClock_Config();
-	int state = 0;
+
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
@@ -91,10 +91,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-		switch(state){
-			case 0:
-				break;
-		}
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
