@@ -50,6 +50,8 @@ double time, dist;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
+void ADCStartUp(int adcChannel);
+void ADCDisable();
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
@@ -61,6 +63,17 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
+
+void initOutputs()
+{
+	//PA4, PA5, PA6			PC7 PC8 PC9				PA9 PA10 PA11
+	GPIOA->MODER |= (1<<8 | 1<<10 | 1<< 12);
+	
+	GPIOC->MODER |= (1<<14 | 1<<16 | 1<<18);
+	
+	GPIOA->MODER |= (1<<9 | 1<<10 | 1<<11);
+}
+
 
 /**
   * @brief  The application entry point.
@@ -74,29 +87,106 @@ int main(){
 	//Initialize the LED pins to output:
 	
 	GPIOC->MODER |= (1<<12 | 1<<14 | 1<<16 | 1<<18);
-	
+	initOutputs();
 	
 	//Select a GPIO pin to use as the ADC input
 	
 	//PC0 -> Additional function ADC_IN10
+	//PC1 -> Additional function ADC_IN11
+	//PC2 -> Additional function ADC_IN12
 	
 
 	//MODER -> ANALOG Mode = 11
 	//MODER[1:0] = [1:0]
 	GPIOC->MODER |= (1<<0 | 1<<1);
+			//set PC1 and PC2 to analog mode
+			GPIOC->MODER |= (1<<2 | 1<<3 | 1<<4 | 1<<5 | 1<<6 | 1<<7);
+			GPIOA->MODER |= (1<<0 | 1<<1);
 	//PUPDR -> no pull up pull down -> 00
 	//PUPDR[1:0] = [1:0]
 	GPIOC->PUPDR &= ~(1<<0 | 1<<1);
+			//set PC1 and PC2 to no PUPD
+			GPIOC->PUPDR &= ~(1<<2 | 1<<3 | 1<<4 | 1<<5 | 1<<6 | 1<<7);
+			GPIOA->PUPDR &= ~(1<<0 | 1<<1);
 	
 	
 	
-	//*******************************************************************************************
-	//							Connect the output (center pin) of a potentiometer to the 									*		
-	//	input pin - the other two pins of the potentiometer should be connected to 3V and GND		*
-	//*******************************************************************************************
+			ADCStartUp(10);
+			ADC1->CHSELR |= (1<<13);
+			ADC1->CHSELR |= (1<<1);
 	
-	
-	
+	int data = 0;
+			int threshold1 = 40;
+			int threshold2 = 60;
+			int threshold3 = 80;
+			int threshold4 = 105;
+
+	int ADC_Result[] = {0,0,0};
+			volatile int counter = 0;
+			volatile int newCount = 0;
+			while (1)
+		{
+		//ADCStartUp(10);
+			
+		ADC1->CR |= ADC_CR_ADSTART; //start ADC conversion
+			
+		for (int i=0; i < 3; i++)
+		 {
+		 while ((ADC1->ISR & ADC_ISR_EOC) == 0) // Wait end of conversion 
+		 {
+		 // For robust implementation, add here time-out management 
+		 }
+		 ADC_Result[i] = ADC1->DR; // Store the ADC conversion result
+		 }
+		//ADC1->CFGR1 ^= ADC_CFGR1_SCANDIR; // Toggle the scan direction 
+		
+		 if(ADC_Result[0] > threshold2)
+		 {
+			 GPIOC->ODR |= (1<<6);
+		 }
+		 else
+		 {
+			 GPIOC->ODR &= ~(1<<6);
+		 }
+		 
+		 if(ADC_Result[1] > threshold2)
+		 {
+			 GPIOC->ODR |= (1<<7);
+		 }
+		 else
+		 {
+			 GPIOC->ODR &= ~(1<<7);
+		 }
+		 
+		 if(ADC_Result[2] > threshold2)
+		 {
+			 GPIOC->ODR |= (1<<8);
+		 }
+		 else
+		 {
+			 GPIOC->ODR &= ~(1<<8);
+		 }  
+		 //GPIOC->ODR &= ~(1<<9);
+		 GPIOC->ODR ^= (1<<9);
+		 //HAL_Delay(500);
+		 while(counter < 50000)
+		 {
+			 counter++;
+					GPIOC->ODR ^= (1<<8);
+		 }
+		 counter = 0;
+		 
+		ADC1->CR |= ADC_CR_ADSTP; /* (1) */
+		while ((ADC1->CR & ADC_CR_ADSTP) != 0) /* (2) */
+		{
+		 /* For robust implementation, add here time-out management */
+		}
+	}
+			
+}
+
+void ADCStartUp(int adcChannel)
+{
 	//enable the ADC1 in the RCC peripheral 
 	RCC->APB2ENR |= RCC_APB2ENR_ADC1EN; 
 	
@@ -110,7 +200,10 @@ int main(){
 			//CFGR1[13] = CONT[0] -> set to 1 for continuous
 	ADC1->CFGR1 &= ~(1<<4 | 1<<3);
 	ADC1->CFGR1 |= (1<<4);
-	ADC1->CFGR1 |= (1<<13);
+	//lets do single value stuff
+	//ADC1->CFGR1 |= (1<<13);
+	ADC1->CFGR1 &= ~(1<<13);
+	ADC1->CFGR1 |= ADC_CFGR1_DMAEN | ADC_CFGR1_DMACFG;
 	
 	
 	//		CFGR1[11:10] = EXTEN[1:0] -- hardware disabled = 00
@@ -119,8 +212,9 @@ int main(){
 	//select/enable the input pin's channel for ADC conversion
 		//channel selec 10 (using ADCIN10)
 		//CHSELR bit 10
-	ADC1->CHSELR |= (1<<10);
-	
+	//ADC1->CHSELR |= (1<<10);
+	//ADC1->CHSELR &= ~(1<<10 | 1<<11 | 1<<12);
+	ADC1->CHSELR |= (1<<adcChannel);
 	
 	//perform a self-calibration, enable, and start the ADC
 	
@@ -128,6 +222,7 @@ int main(){
 			// ADEN is bit 0 in the CR register				DMAEN is bit 0 in the CFGR1 register
 			ADC1->CR &= ~(1<<0);
 			ADC1->CFGR1 &= ~(1<<0);
+			//ADC1->CFGR1 |= ADC_CFGR1_SCANDIR
 			
 			//2. Set ADCAL = 1.
 				//ADCAL is bit 31 in the CR register
@@ -167,63 +262,23 @@ int main(){
 				}
 			}
 			ADC1->CR |= (1<<2);
-			
-	
-	
-	int data = 0;
-			int threshold1 = 60;
-			int threshold2 = 70;
-			int threshold3 = 80;
-			int threshold4 = 100;
+}
 
-			
-			while (1)
-		{
-		
-		
-		//DAC->DHR8R1 = triangle_table[counter];
-		//counter++;
-		//if(counter > 31)
-		//{
-		//	counter = 0;
-		//}
-		//HAL_Delay(1);
-    // in the main loop, read the ADC data register and turn on/off LEDs depending on the value
-		//use four increasing threshold values, each LED should have a minimum ADC value/voltage to turn on
-		//DR[15:7]
-		
-		data = ADC1->DR;
-		//GPIOC->ODR |= (1<<6);
-		if(ADC1->DR > threshold4)
-		{
-			GPIOC->ODR |= (1<<6 | 1<<7 | 1<<8 | 1<<9);
-		}
-		else if(ADC1->DR > threshold3)
-		{
-			GPIOC->ODR |= (1<<6 | 1<<7 | 1<<8 );
-			GPIOC->ODR &= ~(1<<9);
-		}
-		else if(ADC1->DR > threshold2)
-		{
-			GPIOC->ODR |= (1<<6 | 1<<7);
-			GPIOC->ODR &= ~(1<<9 | 1<<8);
-		}
-		else if(ADC1->DR > threshold1)
-		{
-			GPIOC->ODR |= (1<<6);
-			GPIOC->ODR &= ~(1<<9 | 1<<8 | 1<<7);
-		}
-		else
-		{
-			GPIOC->ODR &= ~(1<<9 | 1<<8 | 1<<7 | 1<<6);
-			
-		} 
-		//As the voltage on the input pin increases, the LEDs should light one-by-one
-		
-		//if the pin voltage decreases below the threshold for a LED it should turn off
-		
+void ADCDisable() {
+	/* (1) Stop any ongoing conversion */
+	/* (2) Wait until ADSTP is reset by hardware i.e. conversion is stopped */
+	/* (3) Disable the ADC */
+	/* (4) Wait until the ADC is fully disabled */
+	ADC1->CR |= ADC_CR_ADSTP; /* (1) */
+	while ((ADC1->CR & ADC_CR_ADSTP) != 0) /* (2) */
+	{
+	 /* For robust implementation, add here time-out management */
 	}
-			
+	ADC1->CR |= ADC_CR_ADDIS; /* (3) */
+	while ((ADC1->CR & ADC_CR_ADEN) != 0) /* (4) */
+	{
+	 //
+	}
 }
 
 /**
