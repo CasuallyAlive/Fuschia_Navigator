@@ -21,7 +21,17 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "stm32f0xx.h"
+#define ARM_MATH_CM4
 
+
+#include "IR.h"
+
+void GPIO_Init(void);
+void TIM2_us_Delay(uint32_t delay);
+
+uint32_t data;
+double time, dist;
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,59 +53,109 @@
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
+void ADCStartUp(int adcChannel);
+void ADCDisable();
 
-/* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-/* USER CODE BEGIN PFP */
 
-/* USER CODE END PFP */
 
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
 
-/* USER CODE END 0 */
+
 
 /**
   * @brief  The application entry point.
   * @retval int
   */
-int main(void)
-{
-  /* USER CODE BEGIN 1 */
+int main(){
+	
+		__HAL_RCC_GPIOC_CLK_ENABLE();
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+	
+	
+	
+	initLEDS();
+	initIRSensors();
+	
+	ADCInitSingleConversion();
+	
+	
+	
+			//ADCStartUp(10);
+			//ADC1->CHSELR |= (1<<13);
+			//ADC1->CHSELR |= (1<<1);
+	
+	int data = 0;
+			int threshold1 = 40;
+			int threshold2 = 60;
+			int threshold3 = 80;
+			int threshold4 = 105;
 
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
-
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
-  /* Configure the system clock */
-  SystemClock_Config();
-
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
-  /* USER CODE BEGIN 2 */
-
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-  }
-  /* USER CODE END 3 */
+	int ADC_Result[] = {0,0,0};
+			volatile int counter = 0;
+			volatile int newCount = 0;
+	
+	int resultCount[] = {0,0,0};
+	
+			while (1)
+		{
+			ADCChangeChannel(10);
+			ADCStartSingleConversion();
+			ADCSingleConversion();
+			ADC_Result[0] = ADC1->DR;
+			
+			ADCChangeChannel(13);
+			ADCStartSingleConversion();
+			ADCSingleConversion();
+			ADC_Result[1] = ADC1->DR;
+			
+			ADCChangeChannel(1);
+			ADCStartSingleConversion();
+			ADCSingleConversion();
+			ADC_Result[2] = ADC1->DR;
+			
+			//ADCSingleConversion();
+			//ADC_Result[1] = ADC1->DR;
+			
+		//	ADCSingleConversion();
+		//	ADC_Result[2] = ADC1->DR;
+			if(ADC_Result[0] > threshold2)
+         {
+             GPIOC->ODR |= (1<<6);
+         }
+         else
+         {
+             GPIOC->ODR &= ~(1<<6);
+         }
+         
+         if(ADC_Result[1] > threshold2)
+         {
+             GPIOC->ODR |= (1<<7);
+         }
+         else
+         {
+             GPIOC->ODR &= ~(1<<7);
+         }
+         
+         if(ADC_Result[2] > threshold2)
+         {
+             GPIOC->ODR |= (1<<8);
+         }
+         else
+         {
+             GPIOC->ODR &= ~(1<<8);
+         }  
+			
+			/*while(counter < 50000)
+         {
+             counter++;
+                    
+         }*/
+				 GPIOC->ODR ^= (1<<9);
+				 counter = 0;
+		}
+			
 }
+
 
 /**
   * @brief System Clock Configuration
@@ -150,6 +210,26 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
+
+
+void GPIO_Init() {
+	RCC->AHBENR |= 1<<17; //enable GPIOA clock
+	GPIOA->MODER |= 1<<10; //set PA5 to output mode
+	
+	GPIOA->MODER &= ~(0x00003000); // set PA6 to input mode
+}
+
+
+void TIM2_us_Delay(uint32_t delay) {
+	RCC->APB1ENR |= 1;
+	TIM2->ARR = (int)(delay/0.0625);
+	TIM2->CNT = 0;
+	TIM2->CR1 |= 1;
+	while(!(TIM2->SR & TIM_SR_UIF)) {}
+	TIM2->SR &= ~(0x0001);
+}
+
+
 
 #ifdef  USE_FULL_ASSERT
 /**
