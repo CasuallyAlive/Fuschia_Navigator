@@ -27,10 +27,23 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
+#include <math.h>
 #include "stm32f0xx_hal.h"
+#include "motor.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+extern volatile int state;
+extern volatile float h1, h2, h3;
+extern volatile float refVal;
+extern volatile float idVal;
+
+extern const int IDLE_STATE;
+extern const int FOLLOW_WALL;
+extern const int GO_FORWARD;
+extern const int MANUAL;
+extern const int STOP;
+
 
 /* USER CODE END Includes */
 
@@ -51,9 +64,10 @@ extern "C" {
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
-
 /* USER CODE BEGIN EFP */
 
+// set arguments depending on system configuration
+void retrieveRefParams(float *sensID, float *magn, float *deg);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

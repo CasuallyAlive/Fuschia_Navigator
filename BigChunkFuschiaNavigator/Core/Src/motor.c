@@ -4,17 +4,25 @@
  */
 #include "motor.h"
 
-volatile int16_t error_integral = 0;    // Integrated error signal
-volatile int8_t adc_value = 0;      	// ADC measured motor current
-volatile int16_t error = 0;         	// Speed error signal
+volatile float error_integral_wall_follow = 0;    // Integrated error signal
+volatile float prev_error_wall_follow = 0;         	// Speed error signal
+volatile int target_wall_follow = 16;						// in cm
+
 volatile uint8_t Kp = 0;            	// Proportional gain
 volatile uint8_t Ki = 0;            	// Integral gain
 volatile uint8_t Kd = 0;						 // Derivative gain
 
-volatile struct MotorStruct* motorL = NULL;
-volatile struct MotorStruct* motorR = NULL;
+const float AVG_TIME_ELAPSED = 0.056; // in seconds
+const uint8_t MOTOR_REDUCTION_RATIO = 45; // reduction ratio of 45, so 45 full turns for one revolution
+const uint8_t MOTOR_MAX_RPM = 100;
+const uint8_t MOTOR_COUNTS_PER_REV_SHAFT = 48; // counts for one turn of the shaft
+const uint16_t MOTOR_COUNTS_PER_REV = MOTOR_COUNTS_PER_REV_SHAFT*MOTOR_REDUCTION_RATIO; // total counts for one full revolution
+const uint8_t MOTOR_ENC_INTERR_RATIO = 2; // encoder counts per revolution
 
-int (*PID_Func)(struct MotorStruct* motorL) = &PID_Standard;
+const uint16_t PID_INTEGRAL_CLAMP = 3200; // integral clamp val
+
+
+int (*PID_Func)(struct MotorStruct* motorL, int) = &PID_Standard;
 uint8_t enc_interr_ratio = MOTOR_ENC_INTERR_RATIO;
 
 void setPIDWeights(uint8_t n_Kp, uint8_t n_Ki, uint8_t n_Kd){
@@ -22,9 +30,14 @@ void setPIDWeights(uint8_t n_Kp, uint8_t n_Ki, uint8_t n_Kd){
 	Ki = n_Ki;
 	Kd = n_Kd;
 }
-
+void setWallTargetDist(int new_target){
+	if(new_target > 80 || new_target < 0)
+		return;
+	target_wall_follow = new_target;
+}
 //void setIRDistance
 
+// SetsPIDFunc for control.
 void setPIDFunc(uint8_t plantMode){
 	if(plantMode > 2){
 		printf("PlantMode selected is not supported!");
@@ -41,6 +54,7 @@ void setPIDFunc(uint8_t plantMode){
 	return;
 }
 
+// returns speed that is within limits of motors.
 uint8_t getAdjustedSpeed(uint8_t speed){
 	if(speed < 0)
 		return 0;
@@ -51,15 +65,13 @@ uint8_t getAdjustedSpeed(uint8_t speed){
 }
 
 // Sets up the entire motor drive system
-void motor_init(struct MotorStruct *n_motorL, struct MotorStruct *n_motorR, uint32_t psc, uint32_t arr,
-									uint32_t RCC_TIMxEN_PWM1, uint32_t RCC_TIMxEN_PWM2, uint32_t RCC_TIMxEN_ENC1, uint32_t RCC_TIMxEN_ENC2){
-	motorL = n_motorL;
-	motorR = n_motorR;
-	
-	pwm_init(n_motorL, n_motorR, RCC_TIMxEN_PWM1, RCC_TIMxEN_PWM2);
-	encoder_init(n_motorL, n_motorR, psc, arr, RCC_TIMxEN_ENC1, RCC_TIMxEN_ENC2);
-	//ADC_init();
-}
+//void motor_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32_t psc, uint32_t arr,
+//									uint32_t RCC_TIMxEN_PWM1, uint32_t RCC_TIMxEN_PWM2, uint32_t RCC_TIMxEN_ENC1, uint32_t RCC_TIMxEN_ENC2){
+//	
+//	pwm_init(motorL, motorR, RCC_TIMxEN_PWM1, RCC_TIMxEN_PWM2);
+//	encoder_init(motorL, motorR, psc, arr, RCC_TIMxEN_ENC1, RCC_TIMxEN_ENC2);
+//	//ADC_init();
+//}
 
 // Sets target speed for param motor to the newTarget speed if is within the capabilities of the motor.
 void setTargetSpeed(struct MotorStruct *motor, uint8_t newTarget){
@@ -73,6 +85,7 @@ void setMotorDirection(struct MotorStruct *motor, uint8_t newDir){
 	if(newDir != 0 | newDir != 1)
 		printf("Couldn't set the new direction! Need 0 <= NewDir <= 1!");
 		return;
+	
 	// CW -> dir == 1 -> {in1,in2} = {1,0}; CCW -> dir == 0 -> {in1,in2} = {0,1}
 	motor->dir = newDir;
 	
@@ -83,101 +96,11 @@ void setMotorDirection(struct MotorStruct *motor, uint8_t newDir){
 	setPinState(motor->in2_port, motor->in2_pin, motor->in2);
 }
 
-// Sets pin to High or Low
-void setPinState(char port, uint8_t pin, uint8_t out){
-	void *ptr = getGPIOStruct(port);
-	if(ptr == NULL){
-		printf("Null pointer to GPIO Struct in setmoderBits\n");
-		return;
-	}
-	if(out >= 0){
-		((GPIO_TypeDef *)ptr)->ODR |= (1 << pin);
-		return;
-	}
-		
-	((GPIO_TypeDef *)ptr)->ODR &= ~(1 << pin);
-}
-
-// Mode should be a two bit number occupying bits [1:0]
-void setmoderBits(char port, uint8_t pin, uint8_t mode){
-	if(mode >> 2 != 0){ // don't do anything if mode is not a 2 bit #
-		printf("MODER mode must be two bits in length!");
-		return;
-	}
-	
-	uint8_t moder_pin_bit_start = 2*pin;
-	void *ptr = getGPIOStruct(port);
-	if(ptr == NULL){
-		printf("Null pointer to GPIO Struct in setmoderBits\n");
-		return;
-	}
-	
-	((GPIO_TypeDef *)ptr)->MODER &= ~(0x3 << moder_pin_bit_start);
-	((GPIO_TypeDef *)ptr)->MODER |= (mode << moder_pin_bit_start);
-}	
-
-// alt function should be a four bit number occupying bits [3:0]
-void setAltFuncBits(char port, uint8_t pin, uint8_t alt_func){
-	if(alt_func >> 4 == 0){
-		printf("alt_func larger than 4 bits!");
-		return;
-	}
-	
-	void *ptr = getGPIOStruct(port);
-	if(ptr == NULL){
-		printf("Null pointer to GPIO Struct in setAltFuncBits\n");
-		return;
-	}
-	
-	uint8_t start = 0;
-	if(pin < 8){ // use AFR low if pin < 8
-		start = pin*4; // start of AFSEL{pin}
-		
-		((GPIO_TypeDef *)ptr)->AFR[0] %= ~(0xF << start); // shift 1111_2 by start bits and clear AFSEL{pin}
-		((GPIO_TypeDef *)ptr)->AFR[0] |= (alt_func << start); // set AFR[0] to alt_func
-		
-		return;
-	}
-
-	start = (pin-8)*4; // start of AFSEL{pin}
-		
-	((GPIO_TypeDef *)ptr)->AFR[1] %= ~(0xF << start); // shift 1111_2 by start bits and clear AFSEL{pin}
-	((GPIO_TypeDef *)ptr)->AFR[1] |= (alt_func << start); // set AFR[1] to alt_func
-}
-
-void* getGPIOStruct(char port){
-	void *ptr = NULL;
-	switch(tolower(port)){
-			case 'a':
-				ptr = ((void *)(GPIOA));
-				break;
-			case 'b':
-				ptr = ((void *)(GPIOB));
-				break;
-			case 'c':
-				ptr = ((void *)(GPIOC));
-				break;
-			case 'd':
-				ptr = ((void *)(GPIOD));
-				break;
-			case 'e':
-				ptr = ((void *)(GPIOE));
-				break;
-			case 'f':
-				ptr = ((void *)(GPIOF));
-				break;
-			default:
-				printf("Port for GPIO must be A-F!");
-				break; //Should never happen
-		}
-	return ptr;
-}
-
 // Setup PWM for motor
 void pwm_init_motor(char port, uint8_t pin, uint8_t alt_func){
 
 	// Set alt func mode at pin for H-bridge PWM output
-	setmoderBits(port, pin, MODER_ALT_FUNC);
+	setModerBits(port, pin, MODER_ALT_FUNC);
 	
 	// Set AFR at pin to alt_func
 	setAltFuncBits(port, pin, alt_func);
@@ -188,8 +111,8 @@ void pwm_init_motor(char port, uint8_t pin, uint8_t alt_func){
 void dir_init_motor(char port1, char port2, uint8_t in1, uint8_t in2){
 	
 	// clear bits for pins at ports and set to general purpose output mode
-	setmoderBits(port1, in1, MODER_GEN_OUT);
-	setmoderBits(port2, in2, MODER_GEN_OUT);
+	setModerBits(port1, in1, MODER_GEN_OUT);
+	setModerBits(port2, in2, MODER_GEN_OUT);
 	
 	// Initialize in1 to high
 	setPinState(port1, in1, 0x1);
@@ -200,9 +123,14 @@ void dir_init_motor(char port1, char port2, uint8_t in1, uint8_t in2){
 	return;
 }
 // setup pwm timer
-void pwm_timer_init(TIM_TypeDef *TIMx, uint32_t RCC_TIMxEN){
+void pwm_timer_init(TIM_TypeDef *TIMx, uint32_t RCC_TIMxEN, uint8_t optReg){
 	/// Set up PWM timer
-	RCC->APB1ENR |= RCC_TIMxEN;
+	if(optReg == 1){
+		RCC->APB1ENR |= RCC_TIMxEN;
+	}
+	else{
+		RCC->APB2ENR |= RCC_TIMxEN;
+	}
 	TIMx->CR1 = 0;                         // Clear control registers
 	TIMx->CCMR1 = 0;                       // (prevents having to manually clear bits)
 	TIMx->CCER = 0;
@@ -218,7 +146,7 @@ void pwm_timer_init(TIM_TypeDef *TIMx, uint32_t RCC_TIMxEN){
 }
 
 // Sets up the PWM and direction signals to drive the H-Bridge
-void pwm_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32_t RCC_TIMxEN1, uint32_t RCC_TIMxEN2) {		
+void pwm_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32_t RCC_TIMxEN1, uint32_t RCC_TIMxEN2, uint8_t optReg1, uint8_t optReg2) {		
 			
 	// Pin setup for left motor //
 	pwm_init_motor(motorL->pwm_port, motorL->pwm_pin, motorL->alt_func); // initialize pin PA4 with alt function TIM14_CH1 (AF4).
@@ -226,7 +154,7 @@ void pwm_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32_t R
 	dir_init_motor(motorL->in1_port,motorL->in2_port, motorL->in1_pin,motorL->in2_pin); // initialize pins PA5, PA6 with PA5->High, PA6->Low for CW motor direction.
 	setMotorDirection(motorL, 1);
 	
-	pwm_timer_init(motorL->pwm_tim, RCC_TIMxEN1);
+	pwm_timer_init(motorL->pwm_tim, RCC_TIMxEN1, optReg1);
 	// Pin setup for left motor Done //
 	
 	// Pin setup for right motor //
@@ -235,7 +163,7 @@ void pwm_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32_t R
 	dir_init_motor(motorR->in1_port,motorR->in2_port, motorR->in1_pin,motorR->in2_pin);
 	setMotorDirection(motorR, 1);
 	
-	pwm_timer_init(motorR->pwm_tim, RCC_TIMxEN2);
+	pwm_timer_init(motorR->pwm_tim, RCC_TIMxEN2, optReg2);
 	// Pin setup for right motor Done //
 }
 
@@ -247,15 +175,26 @@ void pwm_setDutyCycle(uint8_t duty, TIM_TypeDef *motorTimer) {
     }
 }
 
-void encoder_timer_init(TIM_TypeDef *TIMx, uint32_t RCC_TIMxEN){
+//void PID_FORWARD(
+
+void encoder_timer_init(TIM_TypeDef *TIMx, uint32_t RCC_TIMxEN, uint8_t ccmrRegOpt){
 	// Set up encoder interface (TIMx encoder input mode)
 	RCC->APB1ENR |= RCC_TIMxEN;
-	TIMx->CCMR1 = 0;
+	if(ccmrRegOpt == 1){
+		TIMx->CCMR1 = 0;
+	}
+	else{
+		TIMx->CCMR2 = 0;
+	}
 	TIMx->CCER = 0;
 	TIMx->SMCR = 0;
 	TIMx->CR1 = 0;
-
-	TIMx->CCMR1 |= (TIM_CCMR1_CC1S_0 | TIM_CCMR1_CC2S_0);   // TI1FP1 and TI2FP2 signals connected to CH1 and CH2
+	if(ccmrRegOpt == 1){
+		TIMx->CCMR1 |= (TIM_CCMR1_CC1S_0 | TIM_CCMR1_CC2S_0);   // TI1FP1 and TI2FP2 signals connected to CH1 and CH2
+	}
+	else{
+		TIMx->CCMR2 |= (TIM_CCMR2_CC3S_0 | TIM_CCMR2_CC4S_0);
+	}
 	TIMx->SMCR |= (TIM_SMCR_SMS_1 | TIM_SMCR_SMS_0);        // Capture encoder on both rising and falling edges
 	TIMx->ARR = 0xFFFF;                                     // Set ARR to top of timer (longest possible period)
 	TIMx->CNT = 0x7FFF;                                     // Bias at midpoint to allow for negative rotation
@@ -266,14 +205,14 @@ void encoder_timer_init(TIM_TypeDef *TIMx, uint32_t RCC_TIMxEN){
 
 // Sets up encoder interface to read motor speed, uses TIM6 for ISR update event.
 void encoder_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32_t psc, uint32_t arr, 
-										uint32_t RCC_TIMxEN1, uint32_t RCC_TIMxEN2) {
+										uint32_t RCC_TIMxEN1, uint32_t RCC_TIMxEN2, uint8_t optReg1, uint8_t optReg2) {
     
 	// Set up encoder for motorL
 	setModerBits(motorL->encA_port, motorL->encA_pin, MODER_ALT_FUNC);
 	setModerBits(motorL->encB_port, motorL->encB_port, MODER_ALT_FUNC);
 
   /// Set up timer for motorL encoder
-	encoder_timer_init(motorL->enc_tim, RCC_TIMxEN1);
+	encoder_timer_init(motorL->enc_tim, RCC_TIMxEN1, optReg1);
 	// Done with Setup for motorL encoder
 	
 	// Set up encoder for motorR
@@ -281,7 +220,7 @@ void encoder_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32
 	setModerBits(motorR->encB_port, motorR->encB_port, MODER_ALT_FUNC);
 
   /// Set up timer for motorR encoder
-	encoder_timer_init(motorR->enc_tim, RCC_TIMxEN2);
+	encoder_timer_init(motorR->enc_tim, RCC_TIMxEN2, optReg2);
 	// Done witth setup for motorR encoder
 	
 	// Configure a second timer (TIM6) to fire an ISR on update event
@@ -300,40 +239,6 @@ void encoder_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32
 	NVIC_SetPriority(TIM6_DAC_IRQn,2);
 }
 
-// Encoder interrupt to calculate motor speed, also manages PI controller
-void TIM6_DAC_IRQHandler(void) {
-	/* Calculate the motor speed in raw encoder counts
-	 * Note the motor speed is signed! Motor can be run in reverse.
-	 * Speed is measured by how far the counter moved from center point
-	 */
-
-	motorL->currentSpeed = ((TIM_TypeDef*) motorL->enc_tim)->CNT - 0x7FFF;
-	((TIM_TypeDef*) motorL->enc_tim)->CNT = 0x7FFF;
-	
-	motorR->currentSpeed = ((TIM_TypeDef*) motorR->enc_tim)->CNT - 0x7FFF;
-	((TIM_TypeDef*) motorR->enc_tim)->CNT = 0x7FFF;
-
-	//motor_speed = (TIM3->CNT - 0x7FFF);
-	//TIM3->CNT = 0x7FFF; // Reset back to center point
-
-	// Call the PID update function
-
-	// output for MotorL
-	struct MotorStruct motor1 = *motorL;
-	int output1 = PID_Func(&motor1); // warning here because using motorL as val (which is fine)
-	motorL->pid_params = motor1.pid_params;
-
-	pwm_setDutyCycle(output1, motorL->pwm_tim);
-
-	// output for MotorR
-	struct MotorStruct motor2 = *motorR;
-	int output2 = PID_Func(&motor2);
-	motorR->pid_params = motor2.pid_params;
-	
-	pwm_setDutyCycle(output2, motorR->pwm_tim);
-
-	TIM6->SR &= ~TIM_SR_UIF;        // Acknowledge the interrupt
-}
 
 //void ADC_init(void) {
 
@@ -356,22 +261,47 @@ void TIM6_DAC_IRQHandler(void) {
     //ADC1->CR |= ADC_CR_ADSTART;             // Signal conversion start
 //}
 
-void resetPID(void){
+void resetPID(struct MotorStruct *motorL, struct MotorStruct *motorR){
 	Kp = Ki = Kd = 0;
-	error_integral = 0;
+	error_integral_wall_follow = prev_error_wall_follow = 0;
+	motorL->pid_params = (struct PID_Params){.prev_error = 0, .error_integral = 0};
+	motorR->pid_params = (struct PID_Params){.prev_error = 0, .error_integral = 0};
 }
 
-int PID_WallFollow(struct MotorStruct *motor){
+int PID_WallFollow(struct MotorStruct *motor, int refVal){
+	
+	int curr_error = target_wall_follow - refVal;
+	
+	int prop = 	Kp*curr_error;
+	int integ = Ki*curr_error + error_integral_wall_follow;
+	// Derivative Gain = kd * {delta}Error/{delta}Time
+	float der = (float) Kd*((float)(curr_error - prev_error_wall_follow)/(float)(AVG_TIME_ELAPSED)); 
+	
+	// clamp integral
+	if(integ < 0) 
+		integ =0;
+	else if(integ > PID_INTEGRAL_CLAMP)
+		integ = PID_INTEGRAL_CLAMP;
+	// Update error values for next PID call
+	error_integral_wall_follow = integ;
+	prev_error_wall_follow = curr_error;
+	
+	// get output
+	int output = prop + integ + (int)floor(der);
+
+	/// TODO: Divide the output into the proper range for output adjustment (Divide by five which is equal to maximum integral clamp)
+	output = output >> 5;
+	/// TODO: Clamp the output value between 0 and MOTOR_MAX_RPM 
+	return output;
+}
+
+int PID_Rotate(struct MotorStruct *motor, int target){
 	
 	return 0;
 }
 
-int PID_Rotate(struct MotorStruct *motor){
-	return 0;
-}
-
 // Uses encoder values for plant (reaches a target speed)
-int PID_Standard(struct MotorStruct *motor) {
+int PID_Standard(struct MotorStruct *motor, int target) {
     
 	/* Run PI control loop
 	 *
@@ -392,13 +322,13 @@ int PID_Standard(struct MotorStruct *motor) {
 	// 0.0375 s or 37.5 ms *Change this*
 	int16_t current_rpm = (motor->currentSpeed / enc_interr_ratio);
 	/// calculate error signal and write to "error" variable
-	error = (motor->target) - current_rpm;
+	int error = target - current_rpm;
 	
 	motor->pid_params.prev_error = error;
 
 	int16_t error_proportional = error*Kp;
 	/// Calculate integral portion of PI controller, write to "error_integral" variable
-	error_integral = motor->pid_params.error_integral + error*Ki;
+	int error_integral = motor->pid_params.error_integral + error*Ki;
 	
 	/// Clamp the value of the integral to a limited positive range
 	if(error_integral < 0) 

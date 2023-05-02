@@ -4,34 +4,35 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <math.h>
 #include <stdlib.h>
 #include "stm32f0xx.h"
+#include "stmlibfuncs.h"
 
 /* -------------------------------------------------------------------------------------------------------------
  *  Global Variable and Type Declarations
  *  -------------------------------------------------------------------------------------------------------------
  */
-extern volatile int16_t error_integral;    // Integrated error signal
-extern volatile int8_t adc_value;      // ADC measured motor current
-extern volatile int16_t error;         // Speed error signal
+ 
+extern volatile float error_integral_wall_follow;    // Integrated error signal
+extern volatile float prev_error_wall_follow;         // Speed error signal
+extern volatile int target_wall_follow; // target for wall following
+
 extern volatile uint8_t Kp;            // Proportional gain
 extern volatile uint8_t Ki;            // Integral gain
 extern volatile uint8_t Kd;						 // Derivative gain
 
 extern uint8_t enc_interr_ratio;
 
-const uint8_t MOTOR_REDUCTION_RATIO = 45; // reduction ratio of 45, so 45 full turns for one revolution
-const uint8_t MOTOR_MAX_RPM = 100;
-const uint8_t MOTOR_COUNTS_PER_REV_SHAFT = 48; // counts for one turn of the shaft
-const uint16_t MOTOR_COUNTS_PER_REV = MOTOR_COUNTS_PER_REV_SHAFT*MOTOR_REDUCTION_RATIO; // total counts for one full revolution
-const uint8_t MOTOR_ENC_INTERR_RATIO = 2; // encoder counts per revolution
+extern const uint8_t MOTOR_REDUCTION_RATIO; // reduction ratio of 45, so 45 full turns for one revolution
+extern const uint8_t MOTOR_MAX_RPM;
+extern const uint8_t MOTOR_COUNTS_PER_REV_SHAFT; // counts for one turn of the shaft
+extern const uint16_t MOTOR_COUNTS_PER_REV; // total counts for one full revolution
+extern const uint8_t MOTOR_ENC_INTERR_RATIO; // encoder counts per revolution
 
-const uint16_t PID_INTEGRAL_CLAMP = 3200; // integral clamp val
+extern const uint16_t PID_INTEGRAL_CLAMP; // integral clamp val
 
-const uint8_t MODER_RESET_STATE = 0x0;
-const uint8_t MODER_GEN_OUT = 0x1;
-const uint8_t MODER_ALT_FUNC = 0x2;
-const uint8_t MODER_ANALOG_MODE = 0x3;
+extern const float AVG_TIME_ELAPSED;
 
 struct PID_Params
 {
@@ -54,8 +55,7 @@ struct MotorStruct
 
 
 
-extern int (*PID_Func)(struct MotorStruct* motorL);
-
+extern int (*PID_Func)(struct MotorStruct* motorL, int);
 
 /* -------------------------------------------------------------------------------------------------------------
  *  Motor Control and Initialization Functions
@@ -63,8 +63,8 @@ extern int (*PID_Func)(struct MotorStruct* motorL);
  */
 
 // Sets up the entire motor drive system
-void motor_init(struct MotorStruct *n_motorL, struct MotorStruct *n_motorR, uint32_t psc, uint32_t arr,
-					uint32_t RCC_TIMxEN_PWM1, uint32_t RCC_TIMxEN_PWM2, uint32_t RCC_TIMxEN_ENC1, uint32_t RCC_TIMxEN_ENC2)
+//void motor_init(struct MotorStruct *n_motorL, struct MotorStruct *n_motorR, uint32_t psc, uint32_t arr,
+//					uint32_t RCC_TIMxEN_PWM1, uint32_t RCC_TIMxEN_PWM2, uint32_t RCC_TIMxEN_ENC1, uint32_t RCC_TIMxEN_ENC2);
 // Set the duty cycle of the PWM, accepts (0-100)
 void pwm_setDutyCycle(uint8_t duty, TIM_TypeDef *motorTimer);
 
@@ -72,31 +72,17 @@ void pwm_setDutyCycle(uint8_t duty, TIM_TypeDef *motorTimer);
 void setPIDFunc(uint8_t plantMode);
 
 // PID control for motors to reach a target speed.
-int PID_Standard(struct MotorStruct *motor);
+int PID_Standard(struct MotorStruct *motor, int);
 
 // PID control for motors to go forward or backward with feedback from imu (Z rotation). 
 //void PID_Forward(void);
 
 // PID control for motors to remain a certain distance from a wall to the right of the navigator.
-int PID_WallFollow(struct MotorStruct *motor);
+int PID_WallFollow(struct MotorStruct *motor, int);
+void setWallTargetDist(int new_target);
 
 // PID control for motors to reach a certain 
-int PID_Rotate(struct MotorStruct *motor);
-
-// Set moder bits at port
-void setModerBits(char port, uint8_t pin, uint8_t mode);
-
-// Get pointer to GPIO struct pointer at port
-void* getGPIOStruct(char port);
-
-// Get adjust speed between [0, MOTOR_MAX_RPM]
-uint8_t getAdjustedSpeed(uint8_t speed);
-
-// Sets alt function bits to mode for pin at port
-void setAltFuncBits(char port, uint8_t pin, uint8_t alt_func);
-
-// Set pin to high via ODR register
-void setPinState(char port, uint8_t pin, uint8_t out);
+int PID_Rotate(struct MotorStruct *motor, int);
 
 /* -------------------------------------------------------------------------------------------------------------
  *  Internal-Use Initialization Functions
@@ -104,11 +90,12 @@ void setPinState(char port, uint8_t pin, uint8_t out);
  */
 
 // Sets up the PWM and direction signals to drive the H-Bridge
-void pwm_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32_t RCC_TIMxEN1, uint32_t RCC_TIMxEN2);
-void pwm_timer_init(TIM_TypeDef *TIMx, uint32_t RCC_TIMxEN);
+void pwm_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32_t RCC_TIMxEN1, uint32_t RCC_TIMxEN2, uint8_t optReg1, uint8_t optReg2);
+void pwm_timer_init(TIM_TypeDef *TIMx, uint32_t RCC_TIMxEN, uint8_t optReg); //optReg: 1 enable on APB1, 0 enable on APB2
 
 // Sets up encoder interface to read motor speed
-void encoder_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32_t psc, uint32_t arr, uint32_t RCC_TIMxEN1, uint32_t RCC_TIMxEN2);
+void encoder_timer_init(TIM_TypeDef *TIMx, uint32_t RCC_TIMxEN, uint8_t opt);
+void encoder_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32_t psc, uint32_t arr, uint32_t RCC_TIMxEN1, uint32_t RCC_TIMxEN2, uint8_t optReg1, uint8_t optReg2);
 
 // Sets up ADC to measure motor current
 void ADC_init(void);
