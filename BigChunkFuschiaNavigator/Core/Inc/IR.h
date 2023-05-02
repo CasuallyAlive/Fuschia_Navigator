@@ -18,6 +18,9 @@ void ADCStartSingleConversion();
 
 void ADCSingleConversion();
 void ADCChangeChannel(int channel);
-
+float getSensorData(int sensor);
+float getSensor1cm(int data);
+float getSensor2cm(int data);
+float getSensor3cm(int data);
 
 void ADCDisable();
