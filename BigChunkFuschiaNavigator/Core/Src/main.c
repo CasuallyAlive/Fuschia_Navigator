@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "IR.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -46,12 +47,28 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+
 /* USER CODE BEGIN PFP */
+void TransmitChar(char dataToTransmit);
+void TransmitString(char strToTransmit[]);
+
+//void ReadRegister(void);
+void ledCommand(char contents[]); 
+void USART3_4_IRQHandler(void);
+void NumberSwitch (int LED, char number);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int NEW_DATA = 0;
+int CHARS_RECEIVED = 0;
+char REGISTER_CONTENTS[2];
+ 
+//for use with IR SENSORS
+	int a;
+	int b;
+	int c;
 
 /* USER CODE END 0 */
 
@@ -78,23 +95,192 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+	
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   /* USER CODE BEGIN 2 */
-
+	RCC->AHBENR |= RCC_AHBENR_GPIOCEN ;		//Enables the GPIOC peripheral clock
+	RCC->AHBENR |= RCC_AHBENR_GPIOAEN ;		//Enables the GPIOA peripheral clock
+	GPIOC->MODER |= GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5_1 ; //Set PC4 (USART3_TX) and PC5 (USART3_RX) to alternate mode
+	GPIOC->AFR[0] |= (1 << 16) | (1 <<20); //ENABLE AFRL for PC 4, 5
+	GPIOC->MODER |= GPIO_MODER_MODER6_0 | GPIO_MODER_MODER7_0 | 
+	GPIO_MODER_MODER8_0 | GPIO_MODER_MODER9_0; //Turn on LEDS
+	GPIOC->ODR |= (1<<9);  //Set LED9 to high
+	
+	RCC->APB1ENR |= RCC_APB1ENR_USART3EN ;
+	 
+	USART3->BRR = HAL_RCC_GetHCLKFreq()/9600; //set usart baud rate
+	USART3->CR1 |= USART_CR1_TE; //enable TX
+	USART3->CR1 |= USART_CR1_RE; //enable RX
+	USART3->CR1 |= USART_CR1_RXNEIE; //enable RXNEIE 
+	USART3->CR1 |= USART_CR1_UE; //Enable the USART
+	
+	NVIC_EnableIRQ(USART3_4_IRQn);
+	NVIC_SetPriority(USART3_4_IRQn,1);
+	
+	
+	//IR SENSOR SETUP
+	initLEDS();
+	initIRSensors();
+	
+	ADCInitSingleConversion();
+	
+			int threshold1 = 40;
+			int threshold2 = 20;
+			int threshold3 = 20;
+			int threshold4 = 105;
+			
+			
+	
+	
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+	TransmitString("Enter two bit command: ");
   while (1)
-  {
-    /* USER CODE END WHILE */
-
+  { 
+		
+		
+		 if (NEW_DATA){
+			 ledCommand(REGISTER_CONTENTS);
+			 NEW_DATA = 0;
+			 TransmitString("Enter two bit command:");
+		 }
+		 
+		   a = getSensorData(1);
+			 b = getSensorData(2);
+			 c = getSensorData(3);
+		 
+		if(a < threshold2)
+		 {
+				 GPIOC->ODR |= (1<<6);
+		 }
+		 else
+		 {
+				 GPIOC->ODR &= ~(1<<6);
+		 }
+		 
+		 if(b < threshold2)
+		 {
+				 GPIOC->ODR |= (1<< 7);
+		 }
+		 else
+		 {
+				 GPIOC->ODR &= ~(1<<7);
+		 }
+		 
+		 if(c < threshold2)
+		 {
+				 GPIOC->ODR |= (1<<8);
+		 }
+		 else
+		 {
+				 GPIOC->ODR &= ~(1<<8);
+		 }  
+		 
+		 
+			    /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
+}
+void TransmitChar(char dataToTransmit){
+	
+		while(!(USART3->ISR & USART_ISR_TXE)){
+		
+		}
+	USART3->TDR = dataToTransmit;
+}
+void TransmitString(char strToTransmit[]){
+	int i = 0;
+	while(strToTransmit[i] != NULL){
+		TransmitChar(strToTransmit[i]);
+		i++;
+	}
+}
+
+
+void ledCommand(char contents[]){
+	switch(contents[0]){
+		case 'w':
+		case 'W':
+			TransmitString("Move");
+			NumberSwitch( 6 ,contents[1]);
+		break;
+		
+		case 'a':
+		case 'A':
+			TransmitString("Left");
+			NumberSwitch(9,contents[1]);
+		break;
+		
+		case 's':
+		case 'S':
+			TransmitString("Reverse");
+			NumberSwitch(7,contents[1]);
+		break;
+		
+		case 'd':
+		case 'D':
+			TransmitString("Right");
+			NumberSwitch(8,contents[1]);
+		break;
+		
+		default:
+			TransmitString("Not a valid command\r\n");
+			 
+	}
+}
+
+void NumberSwitch (int LED, char number){
+	switch(number){
+		
+		case '0': 
+			TransmitString(" forwards. \r\n");  
+		//GPIOC->ODR &= ~(1<<LED);
+		//motor 1 spin = motor 2 spin
+		
+		break;
+		
+		case '1': 
+			TransmitString(" backwords. \r\n");  
+			//GPIOC->ODR &= ~(1<<LED);
+			//motor 1 spin = motor 2 spin
+
+		break;
+		
+		
+		case '4': 
+			TransmitString(" 45 degrees.  \r\n");
+			//GPIOC->ODR ^= (1<<LED);		
+			//motor 1 spin = -motor 2 spin
+			//or motor 2 spin = -motor 1 spin
+		break;
+		
+		case '9': 
+			TransmitString(" 90 degrees.  \r\n");
+			//GPIOC->ODR ^= (1<<LED);
+			//motor 1 spin = -motor 2 spin
+			//or motor 2 spin = -motor 1 spin
+		break;
+		 
+		
+		default:
+			TransmitString("-0 = forward, 1 = backward, 4 = 45 degree turn, 9 = 90 degree turn \r\n");
+	}
+}
+	
+void USART3_4_IRQHandler(void){
+	
+	REGISTER_CONTENTS[CHARS_RECEIVED] = USART3->RDR;
+	CHARS_RECEIVED++;
+	if(CHARS_RECEIVED > 1){
+		NEW_DATA = 1; // set flag to true
+		CHARS_RECEIVED = 0;
+	}
+	
 }
 
 /**
