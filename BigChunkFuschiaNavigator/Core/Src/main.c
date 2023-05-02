@@ -64,6 +64,12 @@ void NumberSwitch (int LED, char number);
 int NEW_DATA = 0;
 int CHARS_RECEIVED = 0;
 char REGISTER_CONTENTS[2];
+extern const uint8_t IDLE_STATE;
+extern const uint8_t FOLLOW_WALL;
+extern const uint8_t GO_FORWARD;
+extern const uint8_t MANUAL;
+extern const uint8_t STOP;
+volatile uint8_t state; 
  
 //for use with IR SENSORS
 	int a;
@@ -123,6 +129,7 @@ int main(void)
 	//IR SENSOR SETUP
 	initLEDS();
 	initIRSensors();
+	state = 0;
 	
 	ADCInitSingleConversion();
 	
@@ -179,9 +186,29 @@ int main(void)
 		 {
 				 GPIOC->ODR &= ~(1<<8);
 		 }  
+		 //idle
+		 if(state == 0)
+		 {
+			 //motors stop
+		 }
+		 //follow wall
+		  if(state == 1)
+		 {
+			 
+		 }
+		 //go straight
+		  if(state == 2)
+		 {
+			 //m1 = m2
+		 }
+		 //manual control
+		  if(state == 3)
+		 {
+			 
+		 }
+		 //check threshold
 		 
-		 
-			    /* USER CODE END WHILE */
+		/* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -201,12 +228,11 @@ void TransmitString(char strToTransmit[]){
 	}
 }
 
-
 void ledCommand(char contents[]){
 	switch(contents[0]){
 		case 'w':
 		case 'W':
-			TransmitString("Move");
+			TransmitString("Go");
 			NumberSwitch( 6 ,contents[1]);
 		break;
 		
@@ -228,6 +254,12 @@ void ledCommand(char contents[]){
 			NumberSwitch(8,contents[1]);
 		break;
 		
+		case 'g':
+		case 'G':
+			TransmitString("follow");
+			NumberSwitch( 6 ,contents[1]);
+		break;
+		
 		default:
 			TransmitString("Not a valid command\r\n");
 			 
@@ -238,17 +270,25 @@ void NumberSwitch (int LED, char number){
 	switch(number){
 		
 		case '0': 
-			TransmitString(" forwards. \r\n");  
+			TransmitString(" striaght. \r\n");  
 		//GPIOC->ODR &= ~(1<<LED);
 		//motor 1 spin = motor 2 spin
-		
+			state = 2;
 		break;
 		
 		case '1': 
 			TransmitString(" backwords. \r\n");  
 			//GPIOC->ODR &= ~(1<<LED);
 			//motor 1 spin = motor 2 spin
-
+			state = 3;
+		break;
+		
+			case '2': 
+			TransmitString(" wall. \r\n");  
+		//GPIOC->ODR &= ~(1<<LED);
+		//motor 1 spin = motor 2 spin
+			state = 1;
+		
 		break;
 		
 		
@@ -257,6 +297,7 @@ void NumberSwitch (int LED, char number){
 			//GPIOC->ODR ^= (1<<LED);		
 			//motor 1 spin = -motor 2 spin
 			//or motor 2 spin = -motor 1 spin
+			state = 3;
 		break;
 		
 		case '9': 
@@ -264,6 +305,7 @@ void NumberSwitch (int LED, char number){
 			//GPIOC->ODR ^= (1<<LED);
 			//motor 1 spin = -motor 2 spin
 			//or motor 2 spin = -motor 1 spin
+			state = 3;
 		break;
 		 
 		
