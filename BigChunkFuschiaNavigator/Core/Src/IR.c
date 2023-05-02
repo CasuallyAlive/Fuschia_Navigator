@@ -2,22 +2,20 @@
 #define ARM_MATH_CM4
 #include "IR.h"
 
-void initOutputs()
-{
-	//PA4, PA5, PA6			PC7 PC8 PC9				PA9 PA10 PA11
-	GPIOA->MODER |= (1<<8 | 1<<10 | 1<< 12);
-	
-	GPIOC->MODER |= (1<<14 | 1<<16 | 1<<18);
-	
-	GPIOA->MODER |= (1<<9 | 1<<10 | 1<<11);
-}
 
-
+/**
+ * Initialize all LEDS (set LED pins to output)
+ */
 void initLEDS() {
 	//Initialize the LED pins to output:
 	GPIOC->MODER |= (1<<12 | 1<<14 | 1<<16 | 1<<18);
 }
 
+/*
+ * Initialize IR Sensors using ADC
+ * Pins: PC0, PC3, PA1 used for ADC
+ * Corrolates to ADC_IN10, ADC_IN13, ADC_IN1
+ */
 void initIRSensors() {
 	//Select a GPIO pin to use as the ADC input
 	
@@ -41,13 +39,110 @@ void initIRSensors() {
 	GPIOA->PUPDR &= ~(1<<0 | 1<<1);
 }
 
+
+/**
+ * input 1, 2, or 3 for parameters based on 
+ * grabbing the 1st 2nd or 3rd sensor data, returns in cm
+ * 
+ * sensor 1 -> PC0
+ * sensor 2 -> PC3
+ * sensor 3 -> PA1
+ *
+ * Sensor 1 -> LEFT
+ * Sensor 2 -> CENTER
+ * Sensor 3 -> RIGHT
+ */
+float getSensorData(int sensor)
+{
+	int initReading = 0;
+	float cmData = 0;
+	switch(sensor)
+	{
+		case 1: //sensor 1
+			
+			ADCChangeChannel(10);
+			ADCStartSingleConversion();
+			ADCSingleConversion();
+			initReading = ADC1->DR;
+			cmData = getSensor1cm(initReading);
+		
+			break;
+		case 2: //sensor 2
+			ADCChangeChannel(13);
+			ADCStartSingleConversion();
+			ADCSingleConversion();
+			initReading = ADC1->DR;
+			cmData = getSensor2cm(initReading);
+		
+			break;
+		case 3: //sensor 3
+			ADCChangeChannel(1);
+			ADCStartSingleConversion();
+			ADCSingleConversion();
+			initReading = ADC1->DR;
+			cmData = getSensor3cm(initReading);
+		
+			break;
+	}
+	return cmData;
+}
+/**
+ * given sensor data, return cm (SENSOR 1)
+ */
+float getSensor1cm(int data)
+{
+	//trendline for sensor 1 =>
+    // y = 1045.4x + 9.4618
+    // x = (y - 9.4618) / 1045.4
+    //x = 1/distance
+    // distance = 1/x
+  //double newDist = 1/((adc2 - 9.4618)/1045.4);
+	double temp1 = data-9.4618;
+	double temp2 = temp1/1034.4;
+	double temp3 = 1.0/temp2;
+	return temp3;
+	//return 1.0/((data-9.4618)/1045.4);
+}
+/**
+ * given sensor data, return cm (SENSOR 2)
+ */
+float getSensor2cm(int data)
+{
+	//trendline for sensor 2 =>
+    // y = 1045.5x + 5.4407
+    // x = (y - 5.4407) / 1045.5
+    //x = 1/distance
+    // distance = 1/x
+  //double newDist = 1/((adc2 - 5.4407)/1045.5);
+	return 1.0/((data-5.4407)/1045.5);
+}
+/**
+ * given sensor data, return cm (SENSOR 3)
+ */
+float getSensor3cm(int data)
+{
+	//trendline for sensor 3 =>
+    // y = 1047.6x + 6.3975
+    // x = (y - 6.3975) / 1047.6
+    //x = 1/distance
+    // distance = 1/x
+  //double newDist = 1/((adc2 - 6.3975)/1047.6);
+	return 1.0/((data-6.3975)/1047.6);
+}
+
+/*
+ * Change ADC Channel -> remove 10, 13, and 1, then set the channel
+ * (only for use with channels 10, 13, and 1)
+ */
 void ADCChangeChannel(int channel)
 {
 	ADC1-> CHSELR &= ~(1<<10 | 1<<13 | 1<<1);
 	ADC1-> CHSELR |= (1<<channel);
 }
 
-//currently uses one channel (10) for single conversion
+/**
+ * Initialize ADC for a single conversion
+ */
 void ADCInitSingleConversion()
 {
 	//enable the ADC1 in the RCC peripheral 
@@ -72,12 +167,7 @@ void ADCInitSingleConversion()
 	//		CFGR1[11:10] = EXTEN[1:0] -- hardware disabled = 00
 	ADC1->CFGR1 &= ~(1<<10 | 1<<13);
 	
-	//select/enable the input pin's channel for ADC conversion
-		//channel selec 10 (using ADCIN10)
-		//CHSELR bit 10
-	//ADC1->CHSELR |= (1<<10);
-	//ADC1->CHSELR &= ~(1<<10 | 1<<11 | 1<<12);
-	ADC1->CHSELR |= (1<<10);
+	
 	
 	//perform a self-calibration, enable, and start the ADC
 	
@@ -128,11 +218,19 @@ void ADCInitSingleConversion()
 	
 }
 
+/*
+ * Start ADC single conversion, after this you can run
+ * ADCSingleConversion() and then grab the data from ADC1->DR
+ */
 void ADCStartSingleConversion()
 {
 		ADC1->CR |= ADC_CR_ADSTART; //start ADC conversion
 }
 
+/*
+ * Do a single conversion 
+ * after which you can grab the data from ADC1->DR
+ */
 void ADCSingleConversion()
 {
 	while ((ADC1->ISR & ADC_ISR_EOC) == 0) // Wait end of conversion 
@@ -142,7 +240,9 @@ void ADCSingleConversion()
 }
 
 
-
+/**
+ * Disabel ADC1
+ */
 void ADCDisable() {
 	/* (1) Stop any ongoing conversion */
 	/* (2) Wait until ADSTP is reset by hardware i.e. conversion is stopped */
