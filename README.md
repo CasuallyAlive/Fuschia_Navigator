@@ -40,8 +40,9 @@ Number commands are as follows: 4 for 45 degree turn, 9 for 90 degree turn, 1 fo
 EXAMPLES: W1 (go straight), L4 (turn left 45 degrees), R9 (turn right 90 degrees)
 Connecting to the bluetooth module requires a linux machine, and a few steps. After correctly wiring the bluetooth including grounding the enable pin, a red led will blink quickly. This will continue until a connection is made, and then it will blink much slower. To connect, go to bluetooth and select HC-05. The default pin is ‘1234’. Once that portion of the connection is made open a linux terminal. In the linux terminal type the following commands in order:
 
-sudo rfcomm bind rfcomm0 98:D3:41:FD:78:52
-sudo screen /dev/rfcomm0 9600
+1. sudo rfcomm bind rfcomm0 98:D3:41:FD:78:52
+
+2. sudo screen /dev/rfcomm0 9600
 
 The first command binds the linux machine to the hc-05 device. The second command shows the communication between machine and rover. The rover will ask for a two-bit command, and when a valid command is pushed will communicate the movement.
 
