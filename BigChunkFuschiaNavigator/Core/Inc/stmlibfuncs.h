@@ -12,18 +12,15 @@ extern const uint8_t MODER_ALT_FUNC;
 extern const uint8_t MODER_ANALOG_MODE;
 
 // Set moder bits at port
-void setModerBits(char port, uint8_t pin, uint8_t mode);
+void setModerBits(void *gpioPTR, uint8_t pin, uint8_t mode);
 
 // Get pointer to GPIO struct pointer at port
-void* getGPIOStruct(char port);
-
-// Get adjust speed between [0, MOTOR_MAX_RPM]
-uint8_t getAdjustedSpeed(uint8_t speed);
+//GPIO_TypeDef* getGPIOStruct(char port);
 
 // Sets alt function bits to mode for pin at port
-void setAltFuncBits(char port, uint8_t pin, uint8_t alt_func);
+void setAltFuncBits(void *gpioPTR, uint8_t pin, uint8_t alt_func);
 
 // Set pin to high via ODR register
-void setPinState(char port, uint8_t pin, uint8_t out);
+void setPinState(void *gpioPTR, uint8_t pin, uint8_t out);
 
 #endif /* STMLIBFUNCS_H_ */

@@ -50,10 +50,10 @@
 volatile struct MotorStruct *motorL_e;
 volatile struct MotorStruct *motorR_e;
 
+volatile float sensID = 1.0, deg = 3*45, magn = 0.0;
 const int IDLE_STATE = 0;
 const int FOLLOW_WALL = 1;
 const int GO_FORWARD = 2;
-const int MANUAL = 3;
 const int STOP = 4;
 
 volatile int state = IDLE_STATE;
@@ -103,28 +103,14 @@ void TIM6_DAC_IRQHandler(void) {
 	}
 	// Follow wall state PID update.
 	else if(state == FOLLOW_WALL){
-		
-		float sensID, magn, deg; // magnitude of point
-		retrieveRefParams(&sensID, &magn, &deg);
-		
+				
 		int ref = ceil(magn*cos(deg));
 		int output = PID_Func(NULL, ref); // careful Kd
 		
 		uint8_t ms1 = motorL_e->target, ms2 = motorR_e->target;
-		// Point between h1 and h2 or at h1
-		if(sensID >= 1.0 || sensID <= 1.5){
-			// set speed for motorL_e
-			ms1 -= output;
-			// set speed for motorR_e
-			ms2 += output;
-		}
-		// Point between h2 and h3 or at h3
-		else if(sensID >= 2.0 || sensID <= 2.5){
-			// set speed for motorL_e
-			ms1 += output;
-			// set speed for motorR_e
-			ms2 -= output;
-		}
+		// retrieve motor speed values (CLAMPED)
+		calculateMotorSpeed(&ms1, &ms2, sensID, output);
+		
 		// Send pwm pulse to motorL
 		pwm_setDutyCycle(ms1, motorL_e->pwm_tim);
 		motorL_e->currentSpeed = ms1;
@@ -136,47 +122,92 @@ void TIM6_DAC_IRQHandler(void) {
 	TIM6->SR &= ~TIM_SR_UIF;        // Acknowledge the interrupt
 }
 
-void retrieveRefParams(float *sensID, float *magn, float *deg){
+void retrieveRefParams(float h1, float h2, float h3){
 	// if wall detected on left and wall on left is the closest wall
 	if(h1 < h2 && h1 < h3){
-		*sensID = 1.0;
-		*deg = DEG1;
-		*magn = h1; // get adjacent distance of rover to wall
+		sensID = 1.0;
+		deg = DEG1;
+		magn = h1; // get adjacent distance of rover to wall
 	}
 	//if wall directly in front of robot and side sensors less than h2
 	else if(h2 < h1 && h2 < h3){
-		float m;
-		float deg_m;
+		float m, deg_m;
 		//if next closest point is h1
 		if(h1 < h3){
-			*sensID = 1.5; // 2.0 - 0.5
+			sensID = 1.5; // 2.0 - 0.5
 			m = h2;
 			deg_m = DEG1;
 		}
 		else{
-			*sensID = 2.5; // 2.0 + 0.5
+			sensID = 2.5; // 2.0 + 0.5
 			m = h3;
 			deg_m = DEG3;
 		}
-		*deg = deg_m - deg2rad(0.5);
-		*magn = ((h2+m)/2); 
+		deg = deg_m - deg2rad(45.0/2.0);
+		magn = ((h2+m)/2); 
 	}
 	//if wall detected on right and wall on right is the closest wall
 	else if(h3 < h1 && h3 < h2){
-		*sensID = 3.0;
-		*deg = DEG3;
-		*magn = h3;
+		sensID = 3.0;
+		deg = DEG3;
+		magn = h3;
 	}
 	// enter here if general assumption is that sensors have the same relative distance from all walls, go straight!
 	else{
-		*sensID = 1.0;
-		*deg = DEG1;
-		*magn = target_wall_follow;
+		sensID = 1.0;
+		deg = DEG1;
+		magn = target_wall_follow;
 	}
 }
 
-/* USER CODE END 0 */
+void calculateMotorSpeed(uint8_t *motorSpeed1, uint8_t *motorSpeed2, float sensID, int output){
+	// Point between h1 and h2 or at h1
+	if(sensID >= 1.0 || sensID <= 1.5){
+		// set speed for motorL_e
+		*motorSpeed1 -= output;
+		// set speed for motorR_e
+		*motorSpeed2 += output;
+	}
+	// Point between h2 and h3 or at h3
+	else if(sensID >= 2.0 || sensID <= 2.5){
+		// set speed for motorL_e
+		*motorSpeed1 += output;
+		// set speed for motorR_e
+		*motorSpeed2 -= output;
+	}
+	*motorSpeed1 = getAdjustedSpeed(*motorSpeed1);
+	*motorSpeed2 = getAdjustedSpeed(*motorSpeed1);
+}
 
+GPIO_TypeDef* getGPIOStructM(char port){
+	if(port == 'a' || port == 'A'){
+		return GPIOA;
+	}
+	else if(port == 'b' || port == 'B'){
+		return GPIOB;
+	}
+	else if(port == 'c' || port == 'C'){
+		return GPIOC;
+	}
+	else if(port == 'd' || port == 'D'){
+		return GPIOD;
+	}
+	else if(port == 'e' || port == 'E'){
+		return GPIOE;
+	}
+	else if(port == 'f' || port == 'F'){
+		return GPIOF;
+	}
+	else{
+		return GPIOA;
+	}
+}
+/* USER CODE END 0 */
+int min(int v1, int v2){
+	if(v1 < v2)
+		return v1;
+	return v2;
+}
 /**
   * @brief  The application entry point.
   * @retval int
@@ -206,7 +237,7 @@ int main(void)
 	.pwm_pin = 4, .in1_pin = 5, .in2_pin = 6, .encA_pin = 4, .encB_pin = 5,
 	.in1 = 1, .in2 = 0,
 	.alt_func = 0x4,
-	.pwm_tim = TIM14, .enc_tim = TIM3, // Assume {}_tim vars are TIM_Typedef pointers
+	.pwm_tim = TIM14, .enc_tim = TIM3, .pwm_gpio = GPIOA, .enc_gpio = GPIOB, // Assume {}_tim vars are TIM_Typedef pointers
 	.currentSpeed = 0,
 	.target = 100,
 	};
@@ -219,7 +250,7 @@ int main(void)
 	.pwm_pin = 2, .in1_pin = 8, .in2_pin = 9, .encA_pin = 10, .encB_pin = 11,
 	.in1 = 1, .in2 = 0,
 	.alt_func = 0,
-	.pwm_tim = TIM15, .enc_tim = TIM2, // Assume {}_tim vars are TIM_Typedef pointers
+	.pwm_tim = TIM15, .enc_tim = TIM2, .pwm_gpio = GPIOA, .enc_gpio = GPIOB, // Assume {}_tim vars are TIM_Typedef pointers
 	.currentSpeed = 0,
 	.target = 100,
 	};
@@ -230,22 +261,60 @@ int main(void)
 	uint32_t arr = 27778; 
 	
 	// Setup GPIO stuff
+	
   RCC->AHBENR |= RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOBEN | RCC_AHBENR_GPIOCEN;
 	pwm_init(&motorL, &motorR, RCC_APB1ENR_TIM14EN, RCC_APB2ENR_TIM15EN, 1, 0); // TIM14 on APB1, and TIM15 on APB2
 	encoder_init(&motorL, &motorR, psc, arr, RCC_APB1ENR_TIM3EN, RCC_APB1ENR_TIM2EN, 1, 0); // Setup ch1,2 on TIM3 and setup ch3,4 on TIM2
 	
-	setPIDFunc(0); // Set PID to go "straight"
-	// End Moder Setup
+	setPIDFunc(0); // Set PID to "straight"
+	uint8_t nextState = state;
 	
+	// init IR
+	initLEDS();
+	initIRSensors();
+	
+	ADCInitSingleConversion();
+
+	// End Moder Setup
+	float h1, h2, h3;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
+		h1 = getSensorData(1);
+		h2 = getSensorData(3);
+		h3 = getSensorData(2);
 		
-    /* USER CODE BEGIN 3 */
+		retrieveRefParams(h1,h2,h3);
+		
+		if(state == IDLE_STATE){
+			nextState = GO_FORWARD;
+		}
+		else if(state == GO_FORWARD){
+			if(min(min(h1,h2), h3) <= 5){
+				nextState = STOP; // fail or finished
+			}
+			else if(min(min(h1,h2), h3) <= 25){
+				nextState = FOLLOW_WALL;
+				resetPID(&motorL,&motorR);
+			}
+		}
+		else if(state == FOLLOW_WALL){
+			if(min(min(h1,h2), h3) <= 5){
+				nextState = STOP; // fail or finished
+			}
+			else if(h1 >= 30 && h3 >= 30 && h2 >= 30){
+				nextState = GO_FORWARD;
+				resetPID(&motorL,&motorR);
+			}
+		}
+		else if(state == STOP){
+			resetPID(&motorL,&motorR);
+		}
+		if(state != nextState)
+			state = nextState;
   }
   /* USER CODE END 3 */
 }

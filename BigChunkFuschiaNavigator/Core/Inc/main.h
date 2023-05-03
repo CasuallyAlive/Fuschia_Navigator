@@ -30,11 +30,13 @@ extern "C" {
 #include <math.h>
 #include "stm32f0xx_hal.h"
 #include "motor.h"
+#include "IR.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
 extern volatile int state;
-extern volatile float h1, h2, h3;
+extern volatile float sensID, deg;
 extern volatile float refVal;
 extern volatile float idVal;
 
@@ -43,7 +45,6 @@ extern const int FOLLOW_WALL;
 extern const int GO_FORWARD;
 extern const int MANUAL;
 extern const int STOP;
-
 
 /* USER CODE END Includes */
 
@@ -67,7 +68,8 @@ void Error_Handler(void);
 /* USER CODE BEGIN EFP */
 
 // set arguments depending on system configuration
-void retrieveRefParams(float *sensID, float *magn, float *deg);
+void retrieveRefParams(float , float , float );
+void calculateMotorSpeed(uint8_t *motorSpeed1, uint8_t *motorSpeed2, float sensID, int output);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

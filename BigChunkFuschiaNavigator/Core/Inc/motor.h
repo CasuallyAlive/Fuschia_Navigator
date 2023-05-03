@@ -47,7 +47,7 @@ struct MotorStruct
 	uint8_t pwm_pin, in1_pin, in2_pin, encA_pin, encB_pin;
 	uint8_t in1, in2;
 	uint8_t alt_func;
-	void *pwm_tim, *enc_tim; // Assume {}_tim vars are TIM_Typedef pointers
+	void *pwm_tim, *enc_tim, *pwm_gpio, *enc_gpio; // Assume {}_tim vars are TIM_Typedef pointers
 	uint8_t currentSpeed;
 	uint8_t target;
 	struct PID_Params pid_params;
@@ -61,7 +61,9 @@ extern int (*PID_Func)(struct MotorStruct* motorL, int);
  *  Motor Control and Initialization Functions
  * -------------------------------------------------------------------------------------------------------------
  */
-
+// Get adjust speed between [0, MOTOR_MAX_RPM]
+uint8_t getAdjustedSpeed(uint8_t speed);
+void resetPID(struct MotorStruct *motorL, struct MotorStruct *motorR);
 // Sets up the entire motor drive system
 //void motor_init(struct MotorStruct *n_motorL, struct MotorStruct *n_motorR, uint32_t psc, uint32_t arr,
 //					uint32_t RCC_TIMxEN_PWM1, uint32_t RCC_TIMxEN_PWM2, uint32_t RCC_TIMxEN_ENC1, uint32_t RCC_TIMxEN_ENC2);
@@ -91,6 +93,7 @@ int PID_Rotate(struct MotorStruct *motor, int);
 
 // Sets up the PWM and direction signals to drive the H-Bridge
 void pwm_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32_t RCC_TIMxEN1, uint32_t RCC_TIMxEN2, uint8_t optReg1, uint8_t optReg2);
+void pwm_init_motor(void *gpio_ptr, uint8_t pin, uint8_t alt_func);
 void pwm_timer_init(TIM_TypeDef *TIMx, uint32_t RCC_TIMxEN, uint8_t optReg); //optReg: 1 enable on APB1, 0 enable on APB2
 
 // Sets up encoder interface to read motor speed

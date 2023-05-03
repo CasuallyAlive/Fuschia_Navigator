@@ -14,7 +14,7 @@ volatile uint8_t Kd = 0;						 // Derivative gain
 
 const float AVG_TIME_ELAPSED = 0.056; // in seconds
 const uint8_t MOTOR_REDUCTION_RATIO = 45; // reduction ratio of 45, so 45 full turns for one revolution
-const uint8_t MOTOR_MAX_RPM = 100;
+const uint8_t MOTOR_MAX_RPM = 130;
 const uint8_t MOTOR_COUNTS_PER_REV_SHAFT = 48; // counts for one turn of the shaft
 const uint16_t MOTOR_COUNTS_PER_REV = MOTOR_COUNTS_PER_REV_SHAFT*MOTOR_REDUCTION_RATIO; // total counts for one full revolution
 const uint8_t MOTOR_ENC_INTERR_RATIO = 2; // encoder counts per revolution
@@ -82,7 +82,7 @@ void setTargetSpeed(struct MotorStruct *motor, uint8_t newTarget){
 
 // Sets the motor direction.
 void setMotorDirection(struct MotorStruct *motor, uint8_t newDir){
-	if(newDir != 0 | newDir != 1)
+	if(newDir < 0 || newDir > 1)
 		printf("Couldn't set the new direction! Need 0 <= NewDir <= 1!");
 		return;
 	
@@ -92,33 +92,33 @@ void setMotorDirection(struct MotorStruct *motor, uint8_t newDir){
 	motor->in1 = newDir;
 	motor->in2 = ~newDir;
 
-	setPinState(motor->in1_port, motor->in1_pin, motor->in1);
-	setPinState(motor->in2_port, motor->in2_pin, motor->in2);
+	setPinState(motor->pwm_gpio, motor->in1_pin, motor->in1);
+	setPinState(motor->pwm_gpio, motor->in2_pin, motor->in2);
 }
 
 // Setup PWM for motor
-void pwm_init_motor(char port, uint8_t pin, uint8_t alt_func){
+void pwm_init_motor(void *gpio_ptr, uint8_t pin, uint8_t alt_func){
 
 	// Set alt func mode at pin for H-bridge PWM output
-	setModerBits(port, pin, MODER_ALT_FUNC);
+	setModerBits(gpio_ptr, pin, MODER_ALT_FUNC);
 	
 	// Set AFR at pin to alt_func
-	setAltFuncBits(port, pin, alt_func);
+	setAltFuncBits(gpio_ptr, pin, alt_func);
 	return;
 }
 
 // Setup for motor direction pins
-void dir_init_motor(char port1, char port2, uint8_t in1, uint8_t in2){
+void dir_init_motor(void *gpio_ptr, char port2, uint8_t in1, uint8_t in2){
 	
 	// clear bits for pins at ports and set to general purpose output mode
-	setModerBits(port1, in1, MODER_GEN_OUT);
-	setModerBits(port2, in2, MODER_GEN_OUT);
+	setModerBits(gpio_ptr, in1, MODER_GEN_OUT);
+	setModerBits(gpio_ptr, in2, MODER_GEN_OUT);
 	
 	// Initialize in1 to high
-	setPinState(port1, in1, 0x1);
+	setPinState(gpio_ptr, in1, 0x1);
 	
 	// Initialize in2 to high
-	setPinState(port2, in2, 0x0);
+	setPinState(gpio_ptr, in2, 0x0);
 	
 	return;
 }
@@ -149,18 +149,18 @@ void pwm_timer_init(TIM_TypeDef *TIMx, uint32_t RCC_TIMxEN, uint8_t optReg){
 void pwm_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32_t RCC_TIMxEN1, uint32_t RCC_TIMxEN2, uint8_t optReg1, uint8_t optReg2) {		
 			
 	// Pin setup for left motor //
-	pwm_init_motor(motorL->pwm_port, motorL->pwm_pin, motorL->alt_func); // initialize pin PA4 with alt function TIM14_CH1 (AF4).
+	pwm_init_motor(motorL->pwm_gpio, motorL->pwm_pin, motorL->alt_func); // initialize pin PA4 with alt function TIM14_CH1 (AF4).
 
-	dir_init_motor(motorL->in1_port,motorL->in2_port, motorL->in1_pin,motorL->in2_pin); // initialize pins PA5, PA6 with PA5->High, PA6->Low for CW motor direction.
+	dir_init_motor(motorL->pwm_gpio,motorL->in2_port, motorL->in1_pin,motorL->in2_pin); // initialize pins PA5, PA6 with PA5->High, PA6->Low for CW motor direction.
 	setMotorDirection(motorL, 1);
 	
 	pwm_timer_init(motorL->pwm_tim, RCC_TIMxEN1, optReg1);
 	// Pin setup for left motor Done //
 	
 	// Pin setup for right motor //
-	pwm_init_motor(motorR->pwm_port, motorR->pwm_pin, motorR->alt_func);
+	pwm_init_motor(motorR->pwm_gpio, motorR->pwm_pin, motorR->alt_func);
 
-	dir_init_motor(motorR->in1_port,motorR->in2_port, motorR->in1_pin,motorR->in2_pin);
+	dir_init_motor(motorR->pwm_gpio,motorR->in2_port, motorR->in1_pin,motorR->in2_pin);
 	setMotorDirection(motorR, 1);
 	
 	pwm_timer_init(motorR->pwm_tim, RCC_TIMxEN2, optReg2);
@@ -208,16 +208,16 @@ void encoder_init(struct MotorStruct *motorL, struct MotorStruct *motorR, uint32
 										uint32_t RCC_TIMxEN1, uint32_t RCC_TIMxEN2, uint8_t optReg1, uint8_t optReg2) {
     
 	// Set up encoder for motorL
-	setModerBits(motorL->encA_port, motorL->encA_pin, MODER_ALT_FUNC);
-	setModerBits(motorL->encB_port, motorL->encB_port, MODER_ALT_FUNC);
+	setModerBits(motorL->enc_gpio, motorL->encA_pin, MODER_ALT_FUNC);
+	setModerBits(motorL->enc_gpio, motorL->encB_pin, MODER_ALT_FUNC);
 
   /// Set up timer for motorL encoder
 	encoder_timer_init(motorL->enc_tim, RCC_TIMxEN1, optReg1);
 	// Done with Setup for motorL encoder
 	
 	// Set up encoder for motorR
-	setModerBits(motorR->encA_port, motorR->encA_pin, MODER_ALT_FUNC);
-	setModerBits(motorR->encB_port, motorR->encB_port, MODER_ALT_FUNC);
+	setModerBits(motorR->enc_gpio, motorR->encA_pin, MODER_ALT_FUNC);
+	setModerBits(motorR->enc_gpio, motorR->encB_pin, MODER_ALT_FUNC);
 
   /// Set up timer for motorR encoder
 	encoder_timer_init(motorR->enc_tim, RCC_TIMxEN2, optReg2);
