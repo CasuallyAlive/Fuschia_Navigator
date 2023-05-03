@@ -1,10 +1,8 @@
 # Fuschia_Navigator
 
-Simple overview of use/purpose.
+Maze navigator rover
 
 ## Description
-
-Maze navigator rover
 
 This is a development of a maze navigating rover. The rover utilizes three infrared sensors, two dc motors with built in encoders, two custom H-bridge motor drivers, an stm32f0 board, and several miscellaneous wires and parts. Lab protocols covered are: PID, UART, GPIO, TIMERS, INTERRUPTS. It also has a second bluetooth UART connection which can be utilized to control the rover if needed. Refer to the parts list in the embedded system final project document for more information.
 
@@ -17,21 +15,18 @@ The navigator uses the IR sensors to drive the motors using PID. The idea is tha
 
 ### Dependencies
 
-* Describe any prerequisites, libraries, OS version, etc., needed before installing program.
-* ex. Windows 10
+REQUIRED LIBRARIES:
 
 FOR BLUETOOTH ONLY: Linux OS
 
 ### Installing
 
-* How/where to download your program
-* Any modifications needed to be made to files/folders
+Building and flashing via Kiel onto an STM32F0 
 
 ### Executing program
+Once powered, the rover will begin to navigate and continually update it's state. The rover will go straight, until it detects something within 30 cms. Otherwise it will follow the closest wall with a 15 cm buffer. If the rover ever gets to a point where it is within 5 cms of a collision, it will enter a stop state. This state can only be exited when the rover is restarted. Restarts can be done by disconnecting the power supply, or pulling the fuse out and reconnecting.
 
-* How to run the program
-* Step-by-step bullets
-BLUETOOTH with USART
+OPTIONAL BLUETOOTH with USART
 
 We modeled our bluetooth after the UART lab, with two bit commands. The first is a direction to move, and the second is a number for angle.
 
@@ -46,13 +41,7 @@ Connecting to the bluetooth module requires a linux machine, and a few steps. Af
 
 The first command binds the linux machine to the hc-05 device. The second command shows the communication between machine and rover. The rover will ask for a two-bit command, and when a valid command is pushed will communicate the movement.
 
-
 ## Help
-
-Any advise for common problems or issues.
-```
-command to run if program contains helper info
-```
 
 ## Authors
 
