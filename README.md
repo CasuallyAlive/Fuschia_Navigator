@@ -27,6 +27,14 @@ Building and flashing via Kiel onto an STM32F0
 ### Executing program
 Once powered, the rover will begin to navigate and continually update it's state. The rover will go straight, until it detects something within 30 cms. Otherwise it will follow the closest wall with a 15 cm buffer. If the rover ever gets to a point where it is within 5 cms of a collision, it will enter a stop state. This state can only be exited when the rover is restarted. Restarts can be done by disconnecting the power supply, or pulling the fuse out and reconnecting.
 
+IMPORTANT FILES AND DESCRIPTIONS
+
+IR.h -- header file containing declarations for all IR sensor methods
+IR.c -- C file containing all IR methods for initializing, getting, and converting IR sensor readings
+
+motor.h -- header file containing declaratinos for all motor methods
+motor.c -- C frile containing all motor methods for motor controls
+
 OPTIONAL BLUETOOTH with USART
 
 We modeled our bluetooth after the UART lab, with two bit commands. The first is a direction to move, and the second is a number for angle.
