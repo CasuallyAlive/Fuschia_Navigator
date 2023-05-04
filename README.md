@@ -11,6 +11,7 @@ The power delivery board is built using a lipo battery, a 30 A fuse, a voltage r
 The navigator uses the IR sensors to drive the motors using PID. The idea is that it will go straight as long as the IR sensors are within a threshold for distance, and turn once it detects an object closing in. The turning direction is dictated by whichever of the three sensors is reading the closest distance from the rover. This is an autonomous design, requiring little input in theory. There was an intention to provide manual override if needed, which was scrapped in the final design due to difficulties with the main part of the project. Bluetooth info will be included at the bottom of this file for anyone looking to use it. 
 
 ![alt text](https://github.com/CasuallyAlive/Fuschia_Navigator/blob/main/Resources/referencePointCalculation.png?raw=true)
+*Image of how a reference point is selected from sensor input for PID informing.*
 
 ## Getting Started
 
