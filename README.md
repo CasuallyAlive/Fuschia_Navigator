@@ -8,11 +8,14 @@ This is a development of a maze navigating rover. The rover utilizes three infra
 
 The power delivery board is built using a lipo battery, a 30 A fuse, a voltage regulator paired with two decoupling capacitors on each power supply (~7.4 V and 5 V supplies). 
 
-The navigator uses the IR sensors to drive the motors using PID. The idea is that it will go straight as long as the IR sensors are within a threshold for distance, and turn once it detects an object closing in. The turning direction is dictated by whichever of the three sensors is reading the closest distance from the rover. This is an autonomous design, requiring little input in theory. There was an intention to provide manual override if needed, which was scrapped in the final design due to difficulties with the main part of the project. Bluetooth info will be included at the bottom of this file for anyone looking to use it. 
+The navigator uses the IR sensors to drive the motors using PID. The idea is that it will go straight as long as the IR sensors are within a threshold for distance, and turn once it detects an object closing in. The turning direction is dictated by whichever of the three sensors is reading the closest distance from the rover. For example, if the point on the right most sensor is the closest to the rover, then adjust the speed of the right motor to be MotorR.target + output and set the speed of the left motor to MotorL.target - output (output is assumed >= 0, so rover turns left proportionally). This is an autonomous design, requiring little input in theory. There was an intention to provide manual override if needed, which was scrapped in the final design due to difficulties with the main part of the project. Bluetooth info will be included at the bottom of this file for anyone looking to use it. 
 
 ![alt text](https://github.com/CasuallyAlive/Fuschia_Navigator/blob/main/Resources/referencePointCalculation.png?raw=true)
- <br /> *Image of how a reference point is selected from sensor input for PID informing.*
-
+<br /> <p style="text-align: center;"> *Image of how a reference point is selected from sensor input for PID informing.* </p>
+<br /> 
+![alt text](https://github.com/CasuallyAlive/Fuschia_Navigator/blob/main/Resources/PID_psuedoCode.png?raw=true)
+<br /> <p style="text-align: center;"> *Simplified psuedocode for different PID control of autonomous rover. Refer to final milestone document to determine how reference points are setup during wall following!* </p>
+<br /> 
 ## Getting Started
 
 ### Dependencies
