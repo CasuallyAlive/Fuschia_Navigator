@@ -6,10 +6,11 @@ Maze navigator rover
 
 This is a development of a maze navigating rover. The rover utilizes three infrared sensors, two dc motors with built in encoders, two custom H-bridge motor drivers, an stm32f0 board, and several miscellaneous wires and parts. Lab protocols covered are: PID, UART, GPIO, TIMERS, INTERRUPTS. It also has a second bluetooth UART connection which can be utilized to control the rover if needed. Refer to the parts list in the embedded system final project document for more information.
 
-The power delivery board is built using a lipo battery, a 30 A fuse, a voltage regulator paired with two capacitors. 
+The power delivery board is built using a lipo battery, a 30 A fuse, a voltage regulator paired with two decoupling capacitors on each power supply (~7.4 V and 5 V supplies). 
 
-The navigator uses the IR sensors to drive the motors using PID. The idea is that it will go straight as long as the IR sensors are within a threshold for distance, and turn once it detects an object closing in. The turning direction is dictated by whichever of the three sensors is reading the furthest distance from the rover. This is an autonomous design, requiring little input in theory. There was an intention to provide manual override if needed, which was scrapped in the final design due to difficulties with the main part of the project. Bluetooth info will be included at the bottom of this file for anyone looking to use it. 
+The navigator uses the IR sensors to drive the motors using PID. The idea is that it will go straight as long as the IR sensors are within a threshold for distance, and turn once it detects an object closing in. The turning direction is dictated by whichever of the three sensors is reading the closest distance from the rover. This is an autonomous design, requiring little input in theory. There was an intention to provide manual override if needed, which was scrapped in the final design due to difficulties with the main part of the project. Bluetooth info will be included at the bottom of this file for anyone looking to use it. 
 
+![alt text](https://github.com/CasuallyAlive/Fuschia_Navigator/blob/main/Resources/referencePointCalculation.png?raw=true)
 
 ## Getting Started
 
@@ -41,8 +42,6 @@ Connecting to the bluetooth module requires a linux machine, and a few steps. Af
 
 The first command binds the linux machine to the hc-05 device. The second command shows the communication between machine and rover. The rover will ask for a two-bit command, and when a valid command is pushed will communicate the movement.
 
-## Help
-
 ## Authors
 
 Contributors names and contact info
@@ -64,8 +63,3 @@ Nicole Sundberg
 ## License
 
 This project is licensed under the [NAME HERE] License - see the LICENSE.md file for details
-
-## Acknowledgments
-
-Inspiration, code snippets, etc.
-ex. * [awesome-readme](https://github.com/matiassingers/awesome-readme)
