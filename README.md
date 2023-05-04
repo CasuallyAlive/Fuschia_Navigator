@@ -29,11 +29,15 @@ Once powered, the rover will begin to navigate and continually update it's state
 
 IMPORTANT FILES AND DESCRIPTIONS
 
+
 IR.h -- header file containing declarations for all IR sensor methods
+
 IR.c -- C file containing all IR methods for initializing, getting, and converting IR sensor readings
 
 motor.h -- header file containing declaratinos for all motor methods
+
 motor.c -- C frile containing all motor methods for motor controls
+
 
 OPTIONAL BLUETOOTH with USART
 
