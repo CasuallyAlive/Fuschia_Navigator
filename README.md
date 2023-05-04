@@ -14,7 +14,7 @@ The navigator uses the IR sensors to drive the motors using PID. The idea is tha
 <br /> <p style="text-align: center;"> *Image of how a reference point is selected from sensor input for PID informing.* </p>
 <br /> 
 ![alt text](https://github.com/CasuallyAlive/Fuschia_Navigator/blob/main/Resources/PID_psuedoCode.png?raw=true)
-<br /> <p style="text-align: center;"> *Simplified psuedocode for different PID control of autonomous rover. Refer to final milestone document to determine how reference points are setup during wall following!* </p>
+<br /> <p style="text-align: center;"> *Simplified psuedocode for PID functionality of autonomous rover as determined by state.* </p>
 <br /> 
 ## Getting Started
 
